@@ -105,7 +105,7 @@ class FreeXcraftBot:
     async def handle_popups(self, page):
         try:
             selectors = ["button:has-text('同意')", "button:has-text('Accept')", ".fc-cta-consent"]
-            for s in selectors:
+            for s 在 selectors:
                 btn = page.locator(s).first
                 if await btn.is_visible():
                     await btn.click()
@@ -122,7 +122,7 @@ class FreeXcraftBot:
             "button[aria-label='Close']",
             ".modal-close",
             "text='×'",
-            ".close-button",
+            ".close-button"，
             "i.fa-times",
             "div[class*='close']"
         ]
