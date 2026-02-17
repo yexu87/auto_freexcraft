@@ -40,8 +40,8 @@ def parse_accounts():
     raw_data = os.getenv("XSERVER_BATCH")
     
     if not raw_data:
-        email = os.getenv("FX_EMAIL")
-        pwd = os.getenv("FX_PASSWORD")
+        email = os.getenv("FX_EMAIL") or "yexu87520a@2925.com"
+        pwd = os.getenv("FX_PASSWORD") or "qweqwe12"
         if email and pwd:
             accounts.append({"email": email, "pass": pwd, "tg_token": DEFAULT_TG_TOKEN, "tg_chat": DEFAULT_TG_CHATID})
         return accounts
@@ -109,8 +109,8 @@ class FreeXcraftBot:
         # 定义可能的关闭按钮特征
         close_selectors = [
             "button[aria-label='Close']", 
-            ".modal-close", 
-            "text='×'", 
+            ".modal-close"， 
+            "text='×'"， 
             ".close-button",
             "i.fa-times",
             "div[class*='close']"
