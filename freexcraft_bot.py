@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-FreeXcraft 自动续时脚本 (Cookie 直通 + 广告处理版)
+FreeXcraft 自动续时脚本 (内置 Cookie 直通防超时版)
 """
 
 import asyncio
@@ -15,7 +15,7 @@ from playwright.async_api import async_playwright
 from playwright_stealth import stealth_async
 
 # =====================================================================
-#                         配置区域
+#                         配置区域 (包含你提取的 Cookie)
 # =====================================================================
 
 USE_HEADLESS = os.getenv("USE_HEADLESS", "true").lower() == "true"
@@ -27,6 +27,130 @@ DASHBOARD_URL = "https://freexcraft.com/servers/3ed9a4d5-b988-4e07-91da-891fe557
 DEFAULT_TG_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN") or ""
 DEFAULT_TG_CHATID = os.getenv("TELEGRAM_CHAT_ID") or ""
 
+# 👇 直接写死了你提取的完整 Cookie 用于调试
+DEBUG_COOKIE = """[
+  {
+    "name": "__eoi",
+    "value": "ID=3e34cf426b3ec53e:T=1771163663:RT=1771350711:S=AA-AfjYiGHdk43MLwjhVxQrTsMDI",
+    "domain": ".freexcraft.com",
+    "path": "/",
+    "expires": 1786715663,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "no_restriction"
+  },
+  {
+    "name": "__gads",
+    "value": "ID=66a6f9444d656fb7:T=1771163663:RT=1771350711:S=ALNI_MYQzDh7I9kpLDkBiLo9I2sVYFW_Hg",
+    "domain": ".freexcraft.com",
+    "path": "/",
+    "expires": 1804859663,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "no_restriction"
+  },
+  {
+    "name": "__gpi",
+    "value": "UID=0000135b392b25f8:T=1771163663:RT=1771350711:S=ALNI_MbQZrY5uBHAbwNVubW13ju8jMByKg",
+    "domain": ".freexcraft.com",
+    "path": "/",
+    "expires": 1804859663,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "no_restriction"
+  },
+  {
+    "name": "_ga",
+    "value": "GA1.1.1109323617.1770991645",
+    "domain": ".freexcraft.com",
+    "path": "/",
+    "expires": 1805910712.147659,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "unspecified"
+  },
+  {
+    "name": "_ga_8KHW58GCFV",
+    "value": "GS2.1.s1771350296$o13$g1$t1771350743$j24$l0$h1578333337",
+    "domain": ".freexcraft.com",
+    "path": "/",
+    "expires": 1805910743.137127,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "unspecified"
+  },
+  {
+    "name": "_tea_utm_cache_10000007",
+    "value": "undefined",
+    "domain": ".freexcraft.com",
+    "path": "/",
+    "expires": 1771596441,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "unspecified"
+  },
+  {
+    "name": "FCCDCF",
+    "value": "%5Bnull%2Cnull%2Cnull%2C%5B%22CQfkB8AQfkB8AEsACBZHCSFoAP_gAEPgACJwK1IB_C7EbCFCiDJ3IKMEMAhHABBAYsAwAAYBAwAADBIQIAQCgkEYBASAFCACCAAAKASBAAAgCAAAAUAAIAAFAABAAAwAIBAIIAAAgAAAAEAIAAAACIAAEQCAAAAEAEAAkAgAAAIASAAAAAAAAACBAAAAAAAAAAAAAAAABAEAAQAAQAAAAAAAiAAAAAAAABAIAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAABAAAAAAAQWEQD-F2I2EKFEGCuQUYIYBCuACAAxYBgAAwCBgAAGCQgQAgFJIIkCAEAIEAAEAAAQAgCAABQEBAAAIAAAAAqAACAABgAQCAQAIABAAAAgIAAAAAAEQAAIgEAAAAIAIABABAAAAQAkAAAAAAAAAECAAAAAAAAAAAAAAAAAAIAAEABgAAAAAABEAAAAAAAACAQIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAA.ILCIB_C7EbCFCiDJ3IKMEMAhXABBAYsAwAAYBAwAADBIQIAQCkkEaBASAFCACCAAAKASBAAAoCAgAAUAAIAAVAABAAAwAIBAIIEAAgAAAQEAIAAAACIAAEQCAAAAEAEAAkAgAAAIASAAAAAAAAACBAAAAAAAAAAAAAAAABAEAASAAwAAAAAAAiAAAAAAAABAIEAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAABAAAAAAAQAAAE%22%2C%222~61.89.122.161.184.196.230.314.442.445.494.550.576.827.1029.1033.1046.1047.1051.1097.1126.1166.1301.1342.1415.1725.1765.1942.1958.1987.2068.2072.2074.2107.2213.2219.2223.2224.2328.2331.2387.2416.2501.2567.2568.2575.2657.2686.2778.2869.2878.2908.2920.2963.3005.3023.3126.3234.3235.3253.3309.3731.6931.8931.13731.15731.33931~dv.%22%2C%222A146546-4501-449D-B761-83CEF7A793CA%22%5D%2Cnull%2Cnull%2C%5B%5B32%2C%22%5B%5C%22032ad8b8-bf97-4eb2-ac92-06ebb994dec8%5C%22%2C%5B1770991641%2C688000000%5D%5D%22%5D%5D%5D",
+    "domain": ".freexcraft.com",
+    "path": "/",
+    "expires": 1804687645,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "unspecified"
+  },
+  {
+    "name": "FCNEC",
+    "value": "%5B%5B%22AKsRol_7agnqnPUer1OgVrMOlskJgG5AXo8dOqlaMl5AbzEmP4aCK_me8gnge2DG4Ydvx9Z1O1zPTDMpAkl9LVilv7BMIEDwNx10QKKCtfMQYGNjJFq2oOOwg3zBMfeT8iDeuY4-zN_FaX_SE75sr2B5s2rxWCxRqw%3D%3D%22%5D%5D",
+    "domain": ".freexcraft.com",
+    "path": "/",
+    "expires": 1802886712,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "unspecified"
+  },
+  {
+    "name": "freexcraft_session",
+    "value": "eyJpdiI6IldxNkR2UDJXQXA4dWxJZ2xhVldhRnc9PSIsInZhbHVlIjoiYXhXT250K1hkSmR2Z1hqK1krT1daaWxkcGdoSUsxdUpKUUV3cmM0a0RjVUx4WEN4cm1TVVZ0RExQa1V6Mml2ZThKUTVXaXFYSTdSRUF1L0R3dnJESkR0eC9uaitnS1VNc0RTdUp6R2dVRmVXUjBIUEVaVmpOMkNON3dxYzYzMy8iLCJtYWMiOiJkYjVjOTVkNThiYmU2MDY3YjFiZmUwNGRjYTFiYjIyMmFkYjAzYTRhOGNkZTk5YTBmOTMzMjgwMDc1YTBhZjVjIiwidGFnIjoiIn0%3D",
+    "domain": ".freexcraft.com",
+    "path": "/",
+    "expires": 1771609934.186529,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "lax"
+  },
+  {
+    "name": "freexcraft_session (copy 2)",
+    "value": "eyJpdiI6IldxNkR2UDJXQXA4dWxJZ2xhVldhRnc9PSIsInZhbHVlIjoiYXhXT250K1hkSmR2Z1hqK1krT1daaWxkcGdoSUsxdUpKUUV3cmM0a0RjVUx4WEN4cm1TVVZ0RExQa1V6Mml2ZThKUTVXaXFYSTdSRUF1L0R3dnJESkR0eC9uaitnS1VNc0RTdUp6R2dVRmVXUjBIUEVaVmpOMkNON3dxYzYzMy8iLCJtYWMiOiJkYjVjOTVkNThiYmU2MDY3YjFiZmUwNGRjYTFiYjIyMmFkYjAzYTRhOGNkZTk5YTBmOTMzMjgwMDc1YTBhZjVjIiwidGFnIjoiIn0%3D",
+    "domain": ".freexcraft.com",
+    "path": "/",
+    "expires": 1771609934.186529,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "lax"
+  },
+  {
+    "name": "freexcraft_session (copy)",
+    "value": "eyJpdiI6IkNvaEN3a0NJTUE1K3gwQjB5MnF3Unc9PSIsInZhbHVlIjoiZzFMNWtENHdwZVg3UXN1bGFBTjBJa2ZKUGUzK2o4aGphaXRJSSt3b2F4K0RUQTBzYm1kV3EvYjdmeloyTEJvRXVla0puSzZzUXdsZnNNUE85QmFCSE9NamtPQjU2cDRHTC9FMDNSQlJYeWtnc3VHUmZzL3R3bCtWczZLcEJ5dGUiLCJtYWMiOiJjYzc2NjkwMzhkNTZlYjQ0OGFhOGI5MWI5MDUwMmViOTllYmViODY2ZjdhZmQ3NGUyZDZlMDMwYzA4M2M2YTkyIiwidGFnIjoiIn0%3D",
+    "domain": ".freexcraft.com",
+    "path": "/",
+    "expires": 1771609537.568516,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "lax"
+  },
+  {
+    "name": "XSRF-TOKEN",
+    "value": "eyJpdiI6IksyKzg2OS9PNDNBdHZhd1o1L050R1E9PSIsInZhbHVlIjoiWlA3b2NqNDZyeCtPVlZtc2VEeFdUVms3a3U2NW5RUEgzTnJLaHdqY1hLSGdpYmJNUDFVMjhCTTBjVGl2R29nT2x3cGdNQTdzYmZxZ3JlU2FhMmgvd2VTaGhkbXdGTWdQaUVMZlU3b2RwMkJRYnlyT1hWL2Y2bjBWUzZjbDlPSjciLCJtYWMiOiIzNGI5ZWZmZmUxZmY4ZTFiMzEyZTVmYWQwZGIzNzI5YzczMGIxNTczNGYzMTE0ZGJhY2Y5NWMxZjIxMDE1YWQ2IiwidGFnIjoiIn0%3D",
+    "domain": ".freexcraft.com",
+    "path": "/",
+    "expires": 1771609934.186278,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "lax"
+  }
+]"""
+
 # =====================================================================
 #                         工具模块
 # =====================================================================
@@ -34,10 +158,10 @@ DEFAULT_TG_CHATID = os.getenv("TELEGRAM_CHAT_ID") or ""
 def parse_accounts():
     accounts = []
     
-    # 优先读取单账号和 Cookie 配置
     email = os.getenv("FX_EMAIL") or "yexu87520a@2925.com"
     pwd = os.getenv("FX_PASSWORD") or "qweqwe12"
-    cookie_str = os.getenv("FX_COOKIE")  # 新增：读取 Cookie 环境变量
+    # 强制将代码顶部的 DEBUG_COOKIE 赋给这个变量
+    cookie_str = DEBUG_COOKIE
     
     accounts.append({
         "email": email, 
@@ -128,16 +252,14 @@ class FreeXcraftBot:
             raw_cookies = json.loads(self.cookie_str)
             clean_cookies = []
             for c in raw_cookies:
-                # Playwright 只接受 Strict, Lax, None 这三种 sameSite 格式，其他的要删掉
                 if "sameSite" in c and c["sameSite"].lower() not in ["strict", "lax", "none"]:
                     del c["sameSite"]
-                # 名字带 copy 的冗余 cookie 可能会报错，直接跳过
                 if "(copy" in c.get("name", ""):
                     continue
                 clean_cookies.append(c)
                 
             await context.add_cookies(clean_cookies)
-            print(f"🍪 [{self.email}] 成功注入缓存的 Cookie！")
+            print(f"🍪 [{self.email}] 成功注入内置的调试 Cookie！")
             return True
         except Exception as e:
             print(f"⚠️ [{self.email}] Cookie 注入失败，格式可能有误: {e}")
@@ -159,20 +281,21 @@ class FreeXcraftBot:
                 
                 if has_cookie:
                     print(f"🔗 [{self.email}] 携带 Cookie 直接访问面板...")
-                    await page.goto(DASHBOARD_URL, wait_until="networkidle")
-                    await asyncio.sleep(3)
+                    # 使用 domcontentloaded 代替 networkidle，防止超时崩溃
+                    await page.goto(DASHBOARD_URL, wait_until="domcontentloaded", timeout=45000)
+                    await asyncio.sleep(5) 
                     
-                    # 检查是否被踢回了登录页
                     if "login" in page.url:
-                        print(f"⚠️ [{self.email}] Cookie 已过期或失效，准备退回密码登录...")
-                        has_cookie = False # 强制进入下面的密码登录流程
+                        print(f"⚠️ [{self.email}] Cookie 已过期或失效，退回密码登录...")
+                        has_cookie = False 
                     else:
                         print(f"✅ [{self.email}] 成功跳过登录！")
 
-                # --- 2. 备用：密码登录 (仅当没 Cookie 或 Cookie 失效时执行) ---
+                # --- 2. 备用：密码登录 ---
                 if not has_cookie:
                     print(f"🚀 [{self.email}] 使用密码访问登录页...")
-                    await page.goto(LOGIN_URL, wait_until="networkidle")
+                    await page.goto(LOGIN_URL, wait_until="domcontentloaded", timeout=45000)
+                    await asyncio.sleep(3)
                     
                     try:
                         btn = page.locator("button:has-text('同意')").first
@@ -182,18 +305,20 @@ class FreeXcraftBot:
                     await page.fill("input[name='email']", self.email)
                     await page.fill("input[name='password']", self.password)
                     await page.click("button[type='submit']")
-                    await page.wait_for_load_state("networkidle")
+                    
+                    await page.wait_for_load_state("domcontentloaded", timeout=30000)
+                    await asyncio.sleep(3)
 
                     if "login" in page.url:
                         raise Exception("登录失败，被 Cloudflare 拦截或密码错误")
 
                     print(f"🔗 [{self.email}] 跳转至服务器面板...")
-                    await page.goto(DASHBOARD_URL, wait_until="networkidle")
+                    await page.goto(DASHBOARD_URL, wait_until="domcontentloaded", timeout=45000)
 
                 # --- 3. 处理广告与续时 ---
                 await self.clear_fullscreen_ads(page)
 
-                renew_btn = page.locator("button:has-text('Renew'), button:has-text('续期'), button:has-text('续时')").first
+                renew_btn = page.locator("button:has-text('Renew'), button:has-text('续期'), button:has-text('续时'), button:has-text('Renew Time')").first
                 
                 try:
                     await renew_btn.wait_for(state="visible", timeout=15000)
@@ -208,7 +333,7 @@ class FreeXcraftBot:
                     print(f"🎉 [{self.email}] {self.detail}！")
                 else:
                     self.status = "Warning"
-                    self.detail = "未找到可点击的 Renew 按钮"
+                    self.detail = "进入了面板，但未找到可点击的 Renew 按钮"
 
             except Exception as e:
                 self.status = "Error"
@@ -225,7 +350,7 @@ class FreeXcraftBot:
 
 async def main():
     print("="*50)
-    print("FreeXcraft 自动续时工具 (Cookie直通版)")
+    print("FreeXcraft 自动续时工具 (内置 Cookie 直通防超时版)")
     print("="*50)
     
     accounts = parse_accounts()
