@@ -35,7 +35,7 @@ DEFAULT_TG_CHATID = os.getenv("TELEGRAM_CHAT_ID") or ""
 # =====================================================================
 
 def parse_accounts():
-    """解析账号，支持单账号环境变量或批量 XSERVER_BATCH"""
+    """解析账号,支持单账号环境变量或批量 XSERVER_BATCH"""
     accounts = []
     raw_data = os.getenv("XSERVER_BATCH")
     
@@ -49,7 +49,7 @@ def parse_accounts():
     for line in raw_data.splitlines():
         line = line.strip()
         if not line or line.startswith("#"): continue
-        parts = [p.strip() for p in line.replace("，", ",").split(",")]
+        parts = [p.strip() for p in line.replace(",", ",").split(",")]
         if len(parts) >= 2:
             accounts.append({
                 "email": parts[0], "pass": parts[1],
@@ -108,11 +108,11 @@ class FreeXcraftBot:
 
         # 定义可能的关闭按钮特征
         close_selectors = [
-            "button[aria-label='Close']", 
-            ".modal-close"， 
+            "button[aria-label='Close']"， 
+            ".modal-close"，
             "text='×'"， 
-            ".close-button",
-            "i.fa-times",
+            ".close-button"，
+            "i.fa-times"，
             "div[class*='close']"
         ]
 
@@ -130,7 +130,7 @@ class FreeXcraftBot:
                         return
             except: continue
 
-        # 2. 如果没找到明确按钮，尝试点击屏幕右上角位置 (坐标模拟)
+        # 2. 如果没找到明确按钮,尝试点击屏幕右上角位置 (坐标模拟)
         try:
             print(f"[{self.email}] 尝试模拟点击右上角关闭坐标...")
             await page.mouse.click(1200, 50) # 假设分辨率 1280 宽度
@@ -142,7 +142,7 @@ class FreeXcraftBot:
             # 启动浏览器
             browser = await p.chromium.launch(headless=USE_HEADLESS)
             context = await browser.new_context(
-                viewport={'width': 1280, 'height': 800},
+                viewport={'width': 1280， 'height': 800},
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
             )
             page = await context.new_page()
@@ -154,13 +154,13 @@ class FreeXcraftBot:
                 await page.goto(LOGIN_URL, wait_until="networkidle")
                 await self.handle_popups(page)
 
-                await page.fill("input[name='email']", self.email)
-                await page.fill("input[name='password']", self.password)
+                await page.fill("input[name='email']"， self.email)
+                await page.fill("input[name='password']"， self.password)
                 await page.click("button[type='submit']")
                 await page.wait_for_load_state("networkidle")
 
                 if "login" in page.url:
-                    raise Exception("登录失败，请检查账号密码")
+                    raise Exception("登录失败,请检查账号密码")
 
                 # --- 2. 仪表盘阶段 ---
                 print(f"🔗 [{self.email}] 跳转至服务器面板...")
@@ -174,7 +174,7 @@ class FreeXcraftBot:
                 renew_btn = page.locator("button:has-text('Renew'), button:has-text('续期'), button:has-text('续时')").first
                 
                 # 等待按钮可见且不被遮挡
-                await renew_btn.wait_for(state="visible", timeout=15000)
+                await renew_btn.wait_for(state="visible"， timeout=15000)
                 
                 if await renew_btn.is_visible():
                     # 再次确保广告没遮挡点击
@@ -211,7 +211,7 @@ async def main():
     
     accounts = parse_accounts()
     if not accounts:
-        print("❌ 未检测到有效账号配置，请设置 FX_EMAIL 或 XSERVER_BATCH")
+        print("❌ 未检测到有效账号配置,请设置 FX_EMAIL 或 XSERVER_BATCH")
         return
 
     target_idx = os.getenv("TARGET_INDEX")
