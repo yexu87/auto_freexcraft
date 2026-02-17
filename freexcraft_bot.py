@@ -55,7 +55,7 @@ def parse_accounts():
         if not line or line.startswith("#"): 
             continue
         
-        parts = [p.strip() for p in line.replace("，", ",").split(",")]
+        parts = [p.strip() for p in line.replace(",", ",").split(",")]
         
         if len(parts) >= 2:
             accounts.append({
@@ -105,7 +105,7 @@ class FreeXcraftBot:
     async def handle_popups(self, page):
         try:
             selectors = ["button:has-text('同意')", "button:has-text('Accept')", ".fc-cta-consent"]
-            for s 在 selectors:
+            for s in selectors:
                 btn = page.locator(s).first
                 if await btn.is_visible():
                     await btn.click()
@@ -122,7 +122,7 @@ class FreeXcraftBot:
             "button[aria-label='Close']",
             ".modal-close",
             "text='×'",
-            ".close-button"，
+            ".close-button",
             "i.fa-times",
             "div[class*='close']"
         ]
@@ -169,7 +169,7 @@ class FreeXcraftBot:
                 await page.wait_for_load_state("networkidle")
 
                 if "login" in page.url:
-                    raise Exception("登录失败，请检查账号密码")
+                    raise Exception("登录失败,请检查账号密码")
 
                 # 2. 仪表盘
                 print(f"🔗 [{self.email}] 跳转至服务器面板...")
