@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-FreeXcraft 多账号自动续时脚本 (含全屏广告处理 & 矩阵模式)
-调试版 - 已内置测试账号
+FreeXcraft 自动续时脚本 (Cookie 直通 + 广告处理版)
 """
 
 import asyncio
 import random
 import os
 import datetime
+import json
 import requests
 from datetime import timezone, timedelta
 from playwright.async_api import async_playwright
@@ -18,7 +18,6 @@ from playwright_stealth import stealth_async
 #                         配置区域
 # =====================================================================
 
-IS_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "true"
 USE_HEADLESS = os.getenv("USE_HEADLESS", "true").lower() == "true"
 WAIT_TIMEOUT = 30000
 
@@ -34,36 +33,20 @@ DEFAULT_TG_CHATID = os.getenv("TELEGRAM_CHAT_ID") or ""
 
 def parse_accounts():
     accounts = []
-    raw_data = os.getenv("XSERVER_BATCH")
     
-    if not raw_data:
-        # 修改点：在这里加入了默认的调试账号和密码
-        email = os.getenv("FX_EMAIL") or "yexu87520a@2925.com"
-        pwd = os.getenv("FX_PASSWORD") or "qweqwe12"
-        
-        if email and pwd:
-            accounts.append({
-                "email": email, 
-                "pass": pwd, 
-                "tg_token": DEFAULT_TG_TOKEN, 
-                "tg_chat": DEFAULT_TG_CHATID
-            })
-        return accounts
-
-    for line in raw_data.splitlines():
-        line = line.strip()
-        if not line or line.startswith("#"): 
-            continue
-        
-        parts = [p.strip() for p in line.replace(",", ",").split(",")]
-        
-        if len(parts) >= 2:
-            accounts.append({
-                "email": parts[0], 
-                "pass": parts[1],
-                "tg_token": parts[2] if len(parts) >= 4 else DEFAULT_TG_TOKEN,
-                "tg_chat": parts[3] if len(parts) >= 4 else DEFAULT_TG_CHATID
-            })
+    # 优先读取单账号和 Cookie 配置
+    email = os.getenv("FX_EMAIL") or "yexu87520a@2925.com"
+    pwd = os.getenv("FX_PASSWORD") or "qweqwe12"
+    cookie_str = os.getenv("FX_COOKIE")  # 新增：读取 Cookie 环境变量
+    
+    accounts.append({
+        "email": email, 
+        "pass": pwd, 
+        "cookie": cookie_str,
+        "tg_token": DEFAULT_TG_TOKEN, 
+        "tg_chat": DEFAULT_TG_CHATID
+    })
+    
     return accounts
 
 class TelegramNotifier:
@@ -98,21 +81,10 @@ class FreeXcraftBot:
     def __init__(self, account):
         self.email = account["email"]
         self.password = account["pass"]
+        self.cookie_str = account.get("cookie")
         self.notifier = TelegramNotifier(account["tg_token"], account["tg_chat"])
         self.status = "Failed"
         self.detail = ""
-
-    async def handle_popups(self, page):
-        try:
-            selectors = ["button:has-text('同意')", "button:has-text('Accept')", ".fc-cta-consent"]
-            for s in selectors:
-                btn = page.locator(s).first
-                if await btn.is_visible():
-                    await btn.click()
-                    print(f"[{self.email}] 已跳过隐私确认弹窗")
-                    break
-        except: 
-            pass
 
     async def clear_fullscreen_ads(self, page):
         print(f"[{self.email}] 正在检测全屏广告遮罩...")
@@ -147,6 +119,30 @@ class FreeXcraftBot:
         except: 
             pass
 
+    async def inject_cookies(self, context):
+        """清洗并注入 Cookie"""
+        if not self.cookie_str:
+            return False
+            
+        try:
+            raw_cookies = json.loads(self.cookie_str)
+            clean_cookies = []
+            for c in raw_cookies:
+                # Playwright 只接受 Strict, Lax, None 这三种 sameSite 格式，其他的要删掉
+                if "sameSite" in c and c["sameSite"].lower() not in ["strict", "lax", "none"]:
+                    del c["sameSite"]
+                # 名字带 copy 的冗余 cookie 可能会报错，直接跳过
+                if "(copy" in c.get("name", ""):
+                    continue
+                clean_cookies.append(c)
+                
+            await context.add_cookies(clean_cookies)
+            print(f"🍪 [{self.email}] 成功注入缓存的 Cookie！")
+            return True
+        except Exception as e:
+            print(f"⚠️ [{self.email}] Cookie 注入失败，格式可能有误: {e}")
+            return False
+
     async def run(self):
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=USE_HEADLESS)
@@ -158,27 +154,45 @@ class FreeXcraftBot:
             await stealth_async(page)
 
             try:
-                # 1. 登录
-                print(f"🚀 [{self.email}] 正在访问登录页...")
-                await page.goto(LOGIN_URL, wait_until="networkidle")
-                await self.handle_popups(page)
+                # --- 1. 尝试 Cookie 直通 ---
+                has_cookie = await self.inject_cookies(context)
+                
+                if has_cookie:
+                    print(f"🔗 [{self.email}] 携带 Cookie 直接访问面板...")
+                    await page.goto(DASHBOARD_URL, wait_until="networkidle")
+                    await asyncio.sleep(3)
+                    
+                    # 检查是否被踢回了登录页
+                    if "login" in page.url:
+                        print(f"⚠️ [{self.email}] Cookie 已过期或失效，准备退回密码登录...")
+                        has_cookie = False # 强制进入下面的密码登录流程
+                    else:
+                        print(f"✅ [{self.email}] 成功跳过登录！")
 
-                await page.fill("input[name='email']", self.email)
-                await page.fill("input[name='password']", self.password)
-                await page.click("button[type='submit']")
-                await page.wait_for_load_state("networkidle")
+                # --- 2. 备用：密码登录 (仅当没 Cookie 或 Cookie 失效时执行) ---
+                if not has_cookie:
+                    print(f"🚀 [{self.email}] 使用密码访问登录页...")
+                    await page.goto(LOGIN_URL, wait_until="networkidle")
+                    
+                    try:
+                        btn = page.locator("button:has-text('同意')").first
+                        if await btn.is_visible(): await btn.click()
+                    except: pass
 
-                if "login" in page.url:
-                    raise Exception("登录失败,请检查账号密码")
+                    await page.fill("input[name='email']", self.email)
+                    await page.fill("input[name='password']", self.password)
+                    await page.click("button[type='submit']")
+                    await page.wait_for_load_state("networkidle")
 
-                # 2. 仪表盘
-                print(f"🔗 [{self.email}] 跳转至服务器面板...")
-                await page.goto(DASHBOARD_URL, wait_until="networkidle")
+                    if "login" in page.url:
+                        raise Exception("登录失败，被 Cloudflare 拦截或密码错误")
 
-                # 处理广告
+                    print(f"🔗 [{self.email}] 跳转至服务器面板...")
+                    await page.goto(DASHBOARD_URL, wait_until="networkidle")
+
+                # --- 3. 处理广告与续时 ---
                 await self.clear_fullscreen_ads(page)
 
-                # 3. 续时
                 renew_btn = page.locator("button:has-text('Renew'), button:has-text('续期'), button:has-text('续时')").first
                 
                 try:
@@ -190,11 +204,11 @@ class FreeXcraftBot:
                     await renew_btn.scroll_into_view_if_needed()
                     await renew_btn.click()
                     self.status = "Success"
-                    self.detail = "成功关闭广告并点击续时按钮"
-                    print(f"🎉 [{self.email}] 续时任务完成！")
+                    self.detail = "续时任务成功完成"
+                    print(f"🎉 [{self.email}] {self.detail}！")
                 else:
                     self.status = "Warning"
-                    self.detail = "进入了面板但未找到可点击的 Renew 按钮"
+                    self.detail = "未找到可点击的 Renew 按钮"
 
             except Exception as e:
                 self.status = "Error"
@@ -211,28 +225,14 @@ class FreeXcraftBot:
 
 async def main():
     print("="*50)
-    print("FreeXcraft 多账号自动续时工具")
+    print("FreeXcraft 自动续时工具 (Cookie直通版)")
     print("="*50)
     
     accounts = parse_accounts()
-    if not accounts:
-        print("❌ 未检测到有效账号配置")
-        return
-
-    target_idx = os.getenv("TARGET_INDEX")
-    if target_idx is not None:
-        try:
-            idx = int(target_idx)
-            if 0 <= idx < len(accounts):
-                bot = FreeXcraftBot(accounts[idx])
-                await bot.run()
-        except ValueError:
-            print("❌ TARGET_INDEX 格式错误")
-    else:
-        for acc in accounts:
-            bot = FreeXcraftBot(acc)
-            await bot.run()
-            await asyncio.sleep(random.randint(10, 30))
+    for acc in accounts:
+        bot = FreeXcraftBot(acc)
+        await bot.run()
+        await asyncio.sleep(random.randint(5, 10))
 
 if __name__ == "__main__":
     asyncio.run(main())
