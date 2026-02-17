@@ -1,6 +1,6 @@
 name: FreeXcraft Auto Renew
 
-于:
+on:
   schedule:
     # 每天国际标准时间 01:00 (北京时间 09:00) 运行一次
     - cron: '0 1 * * *'
@@ -8,11 +8,12 @@ name: FreeXcraft Auto Renew
 
 jobs:
   renew:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     
     # 设置环境变量，从 GitHub Secrets 中读取
     env:
       XSERVER_BATCH: ${{ secrets.XSERVER_BATCH }}
+      FX_COOKIE: ${{ secrets.FX_COOKIE }}  # 👈 必须加这一行，脚本才能拿到 Cookie
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       USE_HEADLESS: "true"
@@ -39,7 +40,8 @@ jobs:
       - name: Run Auto Renew Script
         run: |
           python freexcraft_bot.py
-          - name: Upload Debug Screenshot
+
+      - name: Upload Debug Screenshot
         if: always()
         uses: actions/upload-artifact@v4
         with:
