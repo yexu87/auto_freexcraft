@@ -24,8 +24,8 @@ WAIT_TIMEOUT = 30000
 LOGIN_URL = "https://freexcraft.com/login"
 DASHBOARD_URL = "https://freexcraft.com/servers/3ed9a4d5-b988-4e07-91da-891fe557f69f/dashboard"
 
-DEFAULT_TG_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN") or ""
-DEFAULT_TG_CHATID = os.getenv("TELEGRAM_CHAT_ID") or ""
+DEFAULT_TG_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN") or "8550805872:AAEiDpg6QlHrQannn9z_HGz7DmcEFlD30tI"
+DEFAULT_TG_CHATID = os.getenv("TELEGRAM_CHAT_ID") or "7707990981"
 
 # 👇 直接写死了你提取的完整 Cookie 用于调试
 DEBUG_COOKIE = """[
