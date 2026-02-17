@@ -158,8 +158,8 @@ DEBUG_COOKIE = """[
 def parse_accounts():
     accounts = []
     
-    email = os.getenv("FX_EMAIL") or "yexu87520a@2925.com"
-    pwd = os.getenv("FX_PASSWORD") or "qweqwe12"
+    email = os.getenv("FX_EMAIL")
+    pwd = os.getenv("FX_PASSWORD")
     cookie_str = DEBUG_COOKIE
     
     accounts.append({
