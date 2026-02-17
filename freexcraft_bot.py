@@ -252,8 +252,18 @@ class FreeXcraftBot:
             raw_cookies = json.loads(self.cookie_str)
             clean_cookies = []
             for c in raw_cookies:
-                if "sameSite" in c and c["sameSite"].lower() not in ["strict", "lax", "none"]:
-                    del c["sameSite"]
+                # ！！！修改点：强制将 sameSite 转换为 Playwright 认可的严格首字母大写格式！！！
+                if "sameSite" in c:
+                    val = c["sameSite"].lower()
+                    if val == "strict":
+                        c["sameSite"] = "Strict"
+                    elif val == "lax":
+                        c["sameSite"] = "Lax"
+                    elif val == "none":
+                        c["sameSite"] = "None"
+                    else:
+                        del c["sameSite"] # 遇到 unspecified 或 no_restriction 直接删除
+                        
                 if "(copy" in c.get("name", ""):
                     continue
                 clean_cookies.append(c)
