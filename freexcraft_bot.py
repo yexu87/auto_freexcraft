@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-FreeXcraft 自动续时脚本 (内置 Cookie 直通防超时版)
+FreeXcraft 自动续时脚本 (Cookie直通 + 暴力破除遮罩版)
 """
 
 import asyncio
@@ -15,7 +15,7 @@ from playwright.async_api import async_playwright
 from playwright_stealth import stealth_async
 
 # =====================================================================
-#                         配置区域 (包含你提取的 Cookie)
+#                         配置区域
 # =====================================================================
 
 USE_HEADLESS = os.getenv("USE_HEADLESS", "true").lower() == "true"
@@ -160,7 +160,6 @@ def parse_accounts():
     
     email = os.getenv("FX_EMAIL") or "yexu87520a@2925.com"
     pwd = os.getenv("FX_PASSWORD") or "qweqwe12"
-    # 强制将代码顶部的 DEBUG_COOKIE 赋给这个变量
     cookie_str = DEBUG_COOKIE
     
     accounts.append({
@@ -211,37 +210,38 @@ class FreeXcraftBot:
         self.detail = ""
 
     async def clear_fullscreen_ads(self, page):
-        print(f"[{self.email}] 正在检测全屏广告遮罩...")
-        await asyncio.sleep(5) 
-
-        close_selectors = [
-            "button[aria-label='Close']",
-            ".modal-close",
-            "text='×'",
-            ".close-button",
-            "i.fa-times",
-            "div[class*='close']"
-        ]
-
-        for selector in close_selectors:
-            try:
-                btn = page.locator(selector).first
-                if await btn.is_visible():
-                    box = await btn.bounding_box()
-                    if box and box['y'] < 300: 
-                        await btn.click()
-                        print(f"✅ 已通过选择器关闭广告: {selector}")
-                        await asyncio.sleep(2)
-                        return
-            except: 
-                continue
-
+        print(f"[{self.email}] 正在执行全方位弹窗/遮罩清理...")
+        await asyncio.sleep(4) 
+        
+        # 1. 尝试点击常见的各种“同意/确认”按钮
         try:
-            print(f"[{self.email}] 尝试模拟点击右上角关闭坐标...")
-            await page.mouse.click(1200, 50) 
-            await asyncio.sleep(2)
-        except: 
+            for text in ['同意', 'Accept', 'Got it', 'I Agree']:
+                btn = page.locator(f"button:has-text('{text}')").first
+                if await btn.is_visible(timeout=1000):
+                    await btn.click()
+                    print(f"✅ 点击了弹窗同意按钮: {text}")
+                    await asyncio.sleep(1)
+        except: pass
+
+        # 2. 暴力移除法：向网页注入 JS，物理摧毁带有 z-[100] 或毛玻璃类的 Div
+        try:
+            await page.evaluate("""
+                const overlays = document.querySelectorAll('div');
+                overlays.forEach(div => {
+                    if (div.className.includes('z-[100]') || div.className.includes('backdrop-blur')) {
+                        div.remove();
+                    }
+                });
+            """)
+            print("✅ 暴力清理执行完毕，直接删除了所有底层遮罩！")
+            await asyncio.sleep(1)
+        except Exception as e:
             pass
+            
+        # 3. 按 ESC 键尝试退出普通弹窗
+        try:
+            await page.keyboard.press('Escape')
+        except: pass
 
     async def inject_cookies(self, context):
         """清洗并注入 Cookie"""
@@ -252,7 +252,6 @@ class FreeXcraftBot:
             raw_cookies = json.loads(self.cookie_str)
             clean_cookies = []
             for c in raw_cookies:
-                # ！！！修改点：强制将 sameSite 转换为 Playwright 认可的严格首字母大写格式！！！
                 if "sameSite" in c:
                     val = c["sameSite"].lower()
                     if val == "strict":
@@ -262,7 +261,7 @@ class FreeXcraftBot:
                     elif val == "none":
                         c["sameSite"] = "None"
                     else:
-                        del c["sameSite"] # 遇到 unspecified 或 no_restriction 直接删除
+                        del c["sameSite"]
                         
                 if "(copy" in c.get("name", ""):
                     continue
@@ -272,7 +271,7 @@ class FreeXcraftBot:
             print(f"🍪 [{self.email}] 成功注入内置的调试 Cookie！")
             return True
         except Exception as e:
-            print(f"⚠️ [{self.email}] Cookie 注入失败，格式可能有误: {e}")
+            print(f"⚠️ [{self.email}] Cookie 注入失败: {e}")
             return False
 
     async def run(self):
@@ -291,12 +290,11 @@ class FreeXcraftBot:
                 
                 if has_cookie:
                     print(f"🔗 [{self.email}] 携带 Cookie 直接访问面板...")
-                    # 使用 domcontentloaded 代替 networkidle，防止超时崩溃
                     await page.goto(DASHBOARD_URL, wait_until="domcontentloaded", timeout=45000)
                     await asyncio.sleep(5) 
                     
                     if "login" in page.url:
-                        print(f"⚠️ [{self.email}] Cookie 已过期或失效，退回密码登录...")
+                        print(f"⚠️ [{self.email}] Cookie 已过期，退回密码登录...")
                         has_cookie = False 
                     else:
                         print(f"✅ [{self.email}] 成功跳过登录！")
@@ -331,15 +329,24 @@ class FreeXcraftBot:
                 renew_btn = page.locator("button:has-text('Renew'), button:has-text('续期'), button:has-text('续时'), button:has-text('Renew Time')").first
                 
                 try:
-                    await renew_btn.wait_for(state="visible", timeout=15000)
+                    # 只要节点附着到 DOM 就认为找到了，不管上面有没有遮挡
+                    await renew_btn.wait_for(state="attached", timeout=15000)
                 except:
-                    print(f"⚠️ [{self.email}] 15秒内未找到明确可见的续时按钮。")
+                    print(f"⚠️ [{self.email}] 15秒内未找到续费按钮元素。")
 
-                if await renew_btn.is_visible():
+                if await renew_btn.count() > 0:
                     await renew_btn.scroll_into_view_if_needed()
-                    await renew_btn.click()
+                    print(f"🎯 找到了续期按钮，正在尝试点击...")
+                    try:
+                        # 尝试正常点击，如果被挡住，马上进 except 走强行穿透
+                        await renew_btn.click(timeout=3000)
+                    except Exception:
+                        print(f"🛡️ 按钮仍被无形结界遮挡，启动【强行穿透点击】！")
+                        # force=True 会无视任何弹窗、遮罩、层级，直接命中目标坐标
+                        await renew_btn.click(force=True)
+                        
                     self.status = "Success"
-                    self.detail = "续时任务成功完成"
+                    self.detail = "续时操作触发成功"
                     print(f"🎉 [{self.email}] {self.detail}！")
                 else:
                     self.status = "Warning"
@@ -360,7 +367,7 @@ class FreeXcraftBot:
 
 async def main():
     print("="*50)
-    print("FreeXcraft 自动续时工具 (内置 Cookie 直通防超时版)")
+    print("FreeXcraft 自动续时工具 (最终杀招版)")
     print("="*50)
     
     accounts = parse_accounts()
