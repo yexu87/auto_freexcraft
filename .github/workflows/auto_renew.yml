@@ -2,18 +2,20 @@ name: FreeXcraft Auto Renew
 
 on:
   schedule:
-    # 每天国际标准时间 01:00 (北京时间 09:00) 运行一次
-    - cron: '0 1 * * *'
-  workflow_dispatch: # 允许在 GitHub 页面手动点击运行
+    # 第一组：每天的 00:00, 05:00, 10:00, 15:00, 20:00 (UTC时间)
+    - cron: '0 0,5,10,15,20 * * *'
+    # 第二组：每天的 02:30, 07:30, 12:30, 17:30, 22:30 (UTC时间)
+    - cron: '30 2,7,12,17,22 * * *'
+  workflow_dispatch: # 依然保留了允许你手动点击运行的按钮
 
 jobs:
   renew:
     runs-on: ubuntu-22.04
     
-    # 设置环境变量，从 GitHub Secrets 中读取
+    # 设置环境变量
     env:
       XSERVER_BATCH: ${{ secrets.XSERVER_BATCH }}
-      FX_COOKIE: ${{ secrets.FX_COOKIE }}  # 👈 必须加这一行，脚本才能拿到 Cookie
+      FX_COOKIE: ${{ secrets.FX_COOKIE }} 
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       USE_HEADLESS: "true"
@@ -34,7 +36,6 @@ jobs:
 
       - name: Install Playwright Browsers
         run: |
-          # 仅安装 chromium 减少空间占用和安装时间
           playwright install chromium --with-deps
 
       - name: Run Auto Renew Script
